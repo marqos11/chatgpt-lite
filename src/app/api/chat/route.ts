@@ -180,7 +180,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
         const result = await runStream()
-        writer.merge(result.toUIMessageStream({ sendSources: true, sendReasoning: false }))
+        writer.merge(result.toUIMessageStream({ sendSources: true, sendReasoning: true }))
       },
       onFinish: ({ finishReason, responseMessage }) => {
         console.log('[Chat API] UI stream finished:', { finishReason, messageId: responseMessage?.id })
