@@ -249,7 +249,7 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
 
     // Extract tool-noise: [WebSearch] lines + any tool_name {...} call blocks (multi-line JSON)
     const TOOL_LINE = /^(?:\[WebSearch\].*|\[Tool(?:Use|Result)\].*)$/gm
-    const TOOL_CALL = /(?:web_search_with_snippets|x_keyword_search|x_semantic_search|x_\w+)\s*\{[\s\S]*?\}/g
+    const TOOL_CALL = /(?:web_search_with_snippets|browse_page|x_keyword_search|x_semantic_search|x_\w+|web_search)\s*\{[\s\S]*?\}/g
     const toolLines: string[] = []
     let afterToolNoise = rawText
       .replace(TOOL_LINE, (match) => { toolLines.push(match.trim()); return '' })
@@ -261,25 +261,32 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
     }
 
     // Detect Grok-style narrative thinking: a leading block that starts with
-    // "Thinking about..." and consists of search/browse/plan activity sentences.
-    // We pull it out and put it in its own thought block.
+    // "Thinking about..." and mixes activity sentences, bullet points, and inline tool calls.
+    // We consume all leading content that looks like internal monologue / tool activity.
     if (reasoning.length === 0 && /^Thinking about\b/i.test(afterToolNoise)) {
-      // The thinking block ends when a line doesn't look like internal monologue.
-      // Heuristic: split on double-newline; consume leading paragraphs that are
-      // predominantly activity phrases (Searching, Browsing, Planning, Checking, etc.)
-      const ACTIVITY = /\b(searching|browsing|checking|planning|using web search|looking|fetching|retrieving|scanning|considering|tailoring|summariz)/i
+      const ACTIVITY = /\b(searching|browsing|checking|planning|using web search|looking|fetching|retrieving|scanning|considering|tailoring|summariz|starting with|analyzing|exploring|grouping|prioritiz|listing|extracting|reviewing|gathering)/i
+      // Split into chunks separated by blank lines
       const paragraphs = afterToolNoise.split(/\n{2,}/)
       const thoughtParas: string[] = []
       let responseStart = 0
       for (let i = 0; i < paragraphs.length; i++) {
-        const para = paragraphs[i]
-        // A paragraph is "thinking" if it starts with Thinking/activity words or
-        // is a list of dash-separated activity items
+        const para = paragraphs[i].trim()
+        // A paragraph is "thinking" if it:
+        // - starts with Thinking/activity words
+        // - is a bullet list where most items are activity phrases
+        // - contains inline tool call remnants (browse_page, web_search, num_results=)
+        const hasBullets = /^[-•*]\s/m.test(para)
+        const bulletItems = para.split(/\n/).filter(l => /^[-•*]\s/.test(l.trim()))
+        const activityBullets = bulletItems.filter(l => ACTIVITY.test(l))
+        const isActivityBulletList = hasBullets && bulletItems.length > 0 && activityBullets.length / bulletItems.length >= 0.5
+        const hasToolRemnant = /\bnum_results=|browse_page|web_search\b/i.test(para)
         const isThoughtPara =
           /^Thinking about\b/i.test(para) ||
-          ACTIVITY.test(para.slice(0, 120))
+          ACTIVITY.test(para.slice(0, 150)) ||
+          isActivityBulletList ||
+          hasToolRemnant
         if (isThoughtPara) {
-          thoughtParas.push(para.trim())
+          thoughtParas.push(para)
           responseStart = i + 1
         } else {
           break
