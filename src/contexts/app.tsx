@@ -13,12 +13,16 @@ import {
 } from 'react'
 import { cacheGet, cacheGetJson, cacheSet, cacheSetJson } from '@/lib/cache'
 import { getInitialPresetId } from '@/lib/themes'
-import { CacheKey } from '@/services/constant'
+import { CacheKey, DEFAULT_MODEL, type ModelId } from '@/services/constant'
 
 const SIDEBAR_STORAGE_KEY = 'sidebarToggle'
 
 function getInitialThemePreset(): string {
   return getInitialPresetId(cacheGet(CacheKey.ThemePreset))
+}
+
+function getInitialModel(): ModelId {
+  return (cacheGet(CacheKey.SelectedModel) as ModelId) || DEFAULT_MODEL
 }
 
 interface AppContextValue {
@@ -32,6 +36,8 @@ interface AppContextValue {
   personaModalOpen: boolean
   openPersonaModal: () => void
   closePersonaModal: () => void
+  selectedModel: ModelId
+  setSelectedModel: (model: ModelId) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -53,6 +59,7 @@ export function AppContextProvider({ children }: AppContextProviderProps): React
   const [toggleSidebar, setToggleSidebarState] = useState<boolean>(false)
   const [personaPanelOpen, setPersonaPanelOpen] = useState<boolean>(false)
   const [personaModalOpen, setPersonaModalOpen] = useState<boolean>(false)
+  const [selectedModel, setSelectedModelState] = useState<ModelId>(getInitialModel)
 
   useEffect(() => {
     cacheSet(CacheKey.ThemePreset, themePreset)
@@ -71,12 +78,16 @@ export function AppContextProvider({ children }: AppContextProviderProps): React
     })
   }, [])
 
+  const setSelectedModel = useCallback((model: ModelId) => {
+    setSelectedModelState(model)
+    cacheSet(CacheKey.SelectedModel, model)
+  }, [])
+
   const openPersonaPanel = useCallback(() => setPersonaPanelOpen(true), [])
   const closePersonaPanel = useCallback(() => setPersonaPanelOpen(false), [])
   const openPersonaModal = useCallback(() => setPersonaModalOpen(true), [])
   const closePersonaModal = useCallback(() => setPersonaModalOpen(false), [])
 
-  // Memoize context value to prevent unnecessary re-renders of consumers
   const contextValue = useMemo<AppContextValue>(
     () => ({
       themePreset,
@@ -88,7 +99,9 @@ export function AppContextProvider({ children }: AppContextProviderProps): React
       closePersonaPanel,
       personaModalOpen,
       openPersonaModal,
-      closePersonaModal
+      closePersonaModal,
+      selectedModel,
+      setSelectedModel
     }),
     [
       themePreset,
@@ -99,7 +112,9 @@ export function AppContextProvider({ children }: AppContextProviderProps): React
       openPersonaPanel,
       closePersonaPanel,
       openPersonaModal,
-      closePersonaModal
+      closePersonaModal,
+      selectedModel,
+      setSelectedModel
     ]
   )
 
