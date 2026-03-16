@@ -10,6 +10,7 @@ type ChatCompletionMessage = {
 
 type ChatRequestBody = {
   prompt: string
+  model?: string
   messages: ChatCompletionMessage[]
   input: MessageContent
 }
@@ -33,12 +34,14 @@ export function createChatTransport() {
     api: '/api/chat',
     prepareSendMessagesRequest: ({ messages, body, headers }) => {
       const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
+      const model = typeof body?.model === 'string' ? body.model : undefined
       const lastUserIndex = findLastMessageIndex(messages, 'user')
       const inputMessage = lastUserIndex >= 0 ? messages[lastUserIndex] : undefined
       const historyMessages = lastUserIndex >= 0 ? messages.slice(0, lastUserIndex) : messages
 
       const payload: ChatRequestBody = {
         prompt,
+        model,
         messages: historyMessages.map(toChatCompletionMessage),
         input: inputMessage ? buildMessageContentFromParts(inputMessage.parts ?? []) : ''
       }
