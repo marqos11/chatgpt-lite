@@ -188,7 +188,7 @@ export const Markdown = memo(function Markdown({
     <div
       className={cn(
         styles.markdown,
-        'prose dark:prose-invert max-w-full break-words',
+        'prose dark:prose-invert max-w-full break-words [font-size:inherit]',
         'prose-p:leading-relaxed prose-li:leading-relaxed',
         'prose-headings:tracking-tight prose-headings:font-display',
         'prose-code:before:content-none prose-code:after:content-none',
