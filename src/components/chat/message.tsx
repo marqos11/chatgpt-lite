@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useCallback, useDeferredValue, useMemo, type ReactNode } from 'react'
+import { memo, useCallback, useDeferredValue, useMemo, useState, type ReactNode } from 'react'
 import { getTextFromParts } from '@/components/chat/chat-attachments'
 import type {
   ChatMessage,
@@ -12,7 +12,7 @@ import { Markdown } from '@/components/markdown/markdown'
 import { Button } from '@/components/ui/button'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { cn } from '@/lib/utils'
-import { Check, Copy, ExternalLink, FileText } from 'lucide-react'
+import { Check, ChevronDown, Copy, ExternalLink, FileText, Sparkles } from 'lucide-react'
 
 export interface MessageProps {
   message: ChatMessage
@@ -108,7 +108,6 @@ function stripTrailingSourceMarkdownLinks(text: string, sources: ChatMessageSour
     working = working.slice(0, Math.max(0, working.length - match[0].length)).trimEnd()
   }
 
-  // Keep single trailing links in the main answer (they are often intentional).
   return strippedCount >= 2 ? working : text
 }
 
@@ -146,6 +145,94 @@ function getSourceTitle(source: ChatMessageSource): string {
   }
 
   return source.title || 'Document'
+}
+
+// Strip tool-use noise that leaks into the text stream:
+// [WebSearch], web_search_with_snippets {...}, etc.
+const TOOL_NOISE_PATTERNS = [
+  /\[WebSearch\]\s*[^\n]*/g,
+  /web_search_with_snippets\s*\{[^}]*\}/g,
+  /\[Tool(?:Use|Result)\][^\n]*/g,
+]
+
+function stripToolNoise(text: string): string {
+  let cleaned = text
+  for (const pattern of TOOL_NOISE_PATTERNS) {
+    cleaned = cleaned.replace(pattern, '')
+  }
+  return cleaned.replace(/\n{3,}/g, '\n\n').trim()
+}
+
+// Split raw text into think blocks and regular content
+interface ContentSegment {
+  type: 'think' | 'text'
+  content: string
+}
+
+function parseContent(raw: string): ContentSegment[] {
+  const cleaned = stripToolNoise(raw)
+  const segments: ContentSegment[] = []
+  // Match <think>...</think> or <thinking>...</thinking> (case-insensitive, dotall)
+  const THINK_RE = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = THINK_RE.exec(cleaned)) !== null) {
+    if (match.index > lastIndex) {
+      const before = cleaned.slice(lastIndex, match.index).trim()
+      if (before) segments.push({ type: 'text', content: before })
+    }
+    const thinkContent = match[1].trim()
+    if (thinkContent) segments.push({ type: 'think', content: thinkContent })
+    lastIndex = match.index + match[0].length
+  }
+
+  const after = cleaned.slice(lastIndex).trim()
+  if (after) segments.push({ type: 'text', content: after })
+
+  return segments
+}
+
+function ThinkBlock({ content }: { content: string }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const lines = content.split('\n').filter(Boolean).length
+
+  return (
+    <div className="mb-2 w-full">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'group flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-left transition-colors duration-150',
+          'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+          open && 'bg-muted/40'
+        )}
+        aria-expanded={open}
+      >
+        <Sparkles className="size-3 shrink-0 opacity-60" />
+        <span className="text-[0.78rem] font-medium">
+          {open ? 'Hide' : 'Show'} thinking
+          {!open && (
+            <span className="text-muted-foreground/60 ml-1 font-normal">
+              · {lines} line{lines !== 1 ? 's' : ''}
+            </span>
+          )}
+        </span>
+        <ChevronDown
+          className={cn(
+            'ml-auto size-3 shrink-0 transition-transform duration-200',
+            open && 'rotate-180'
+          )}
+        />
+      </button>
+      {open && (
+        <div className="border-border/40 bg-muted/20 mt-1 rounded-lg border px-3 py-2.5">
+          <p className="text-muted-foreground whitespace-pre-wrap text-[0.78rem] leading-relaxed font-mono">
+            {content}
+          </p>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function Sources({ sources }: { sources: ChatMessageSource[] }): React.JSX.Element | null {
@@ -220,14 +307,24 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
   const deferredParts = useDeferredValue(parts)
   const { copy, copied } = useCopyToClipboard()
 
-  const markdownSource = useMemo(() => {
-    const rawText = getTextContent(deferredParts)
-    return sources.length > 0 ? stripTrailingSourceMarkdownLinks(rawText, sources) : rawText
+  const rawText = useMemo(() => {
+    const text = getTextContent(deferredParts)
+    return sources.length > 0 ? stripTrailingSourceMarkdownLinks(text, sources) : text
   }, [deferredParts, sources])
 
-  const copyText = useMemo(() => getTextContent(parts), [parts])
-  const hasTextContent = copyText.trim().length > 0
-  const showThinking = Boolean(isThinking) && !hasTextContent
+  const segments = useMemo(() => parseContent(rawText), [rawText])
+
+  // copyText should be clean response text only (no think blocks, no tool noise)
+  const copyText = useMemo(() => {
+    return segments
+      .filter((s) => s.type === 'text')
+      .map((s) => s.content)
+      .join('\n\n')
+      .trim()
+  }, [segments])
+
+  const hasTextContent = copyText.length > 0
+  const showThinking = Boolean(isThinking) && rawText.trim().length === 0
 
   const handleCopy = useCallback(() => {
     void copy(copyText)
@@ -241,7 +338,15 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
             {showThinking ? (
               <span className="text-muted-foreground font-medium">Thinking...</span>
             ) : (
-              <Markdown>{markdownSource}</Markdown>
+              <>
+                {segments.map((seg, i) =>
+                  seg.type === 'think' ? (
+                    <ThinkBlock key={i} content={seg.content} />
+                  ) : (
+                    <Markdown key={i}>{seg.content}</Markdown>
+                  )
+                )}
+              </>
             )}
           </div>
         </div>
