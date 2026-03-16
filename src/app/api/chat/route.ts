@@ -12,72 +12,56 @@ import {
 
 export const runtime = 'edge'
 
-let cachedModel:
-  | {
-      model: LanguageModel
-      isAzure: boolean
-      openaiModel?: string
-      openaiProvider?: ReturnType<typeof createOpenAI>
-    }
-  | undefined
+// Cache the provider config only — never a specific model instance
+type ProviderConfig =
+  | { isAzure: true; azure: ReturnType<typeof createAzure>; azureDeployment: string }
+  | { isAzure: false; openai: ReturnType<typeof createOpenAI>; defaultModel: string }
 
-/**
- * Helper method to dynamically select and configure the AI model
- * based on environment variables.
- *
- * @returns {object} Configured language model and provider metadata (Azure or OpenAI)
- */
-function getModel(): {
-  model: LanguageModel
-  isAzure: boolean
-  openaiModel?: string
-  openaiProvider?: ReturnType<typeof createOpenAI>
-} {
-  if (cachedModel) {
-    return cachedModel
-  }
+let cachedProvider: ProviderConfig | undefined
 
-  // Check if Azure OpenAI credentials are provided
+function getProvider(): ProviderConfig {
+  if (cachedProvider) return cachedProvider
+
   const azureResourceName = process.env.AZURE_OPENAI_RESOURCE_NAME
   const azureApiKey = process.env.AZURE_OPENAI_API_KEY
   const azureDeployment = process.env.AZURE_OPENAI_DEPLOYMENT
 
   if (azureResourceName && azureApiKey && azureDeployment) {
-    // Use Azure OpenAI
-    const azure = createAzure({
-      resourceName: azureResourceName,
-      apiKey: azureApiKey
-    })
-    cachedModel = { model: azure(azureDeployment), isAzure: true }
-    return cachedModel
+    cachedProvider = {
+      isAzure: true,
+      azure: createAzure({ resourceName: azureResourceName, apiKey: azureApiKey }),
+      azureDeployment
+    }
+    return cachedProvider
   }
 
-  // Fallback to OpenAI
   const openaiApiKey = process.env.OPENAI_API_KEY
-  let openaiBaseUrl = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1'
-  const openaiModel = process.env.OPENAI_MODEL || 'gpt-4o-mini'
-  // Ensure baseURL ends with /v1 for OpenAI-compatible APIs
-  if (!openaiBaseUrl.endsWith('/v1')) {
-    openaiBaseUrl = openaiBaseUrl.replace(/\/$/, '') + '/v1'
-  }
   if (!openaiApiKey) {
     throw new Error(
       'No AI provider configured. Please set either Azure OpenAI or OpenAI credentials in environment variables.'
     )
   }
-
-  const openai = createOpenAI({
-    apiKey: openaiApiKey,
-    baseURL: openaiBaseUrl
-  })
-
-  cachedModel = {
-    model: openai.chat(openaiModel),
-    isAzure: false,
-    openaiModel,
-    openaiProvider: openai
+  let openaiBaseUrl = process.env.OPENAI_API_BASE_URL || 'https://api.openai.com/v1'
+  if (!openaiBaseUrl.endsWith('/v1')) {
+    openaiBaseUrl = openaiBaseUrl.replace(/\/$/, '') + '/v1'
   }
-  return cachedModel
+
+  cachedProvider = {
+    isAzure: false,
+    openai: createOpenAI({ apiKey: openaiApiKey, baseURL: openaiBaseUrl }),
+    defaultModel: process.env.OPENAI_MODEL || 'gpt-4o-mini'
+  }
+  return cachedProvider
+}
+
+// Build a fresh model instance per request so the selected model is always respected
+function buildModel(requestedModel?: string): LanguageModel {
+  const provider = getProvider()
+  if (provider.isAzure) {
+    return provider.azure(provider.azureDeployment)
+  }
+  const modelId = requestedModel || provider.defaultModel
+  return provider.openai.chat(modelId)
 }
 
 type MessageContent =
@@ -115,10 +99,7 @@ function convertToCoreMessage(msg: ChatCompletionMessage): ModelMessage {
 
   if (msg.role === 'user') {
     if (typeof msg.content === 'string') {
-      return {
-        role: 'user',
-        content: msg.content
-      }
+      return { role: 'user', content: msg.content }
     }
     return {
       role: 'user',
@@ -128,39 +109,25 @@ function convertToCoreMessage(msg: ChatCompletionMessage): ModelMessage {
         } else if (part.type === 'image') {
           return [{ type: 'image', image: part.image }]
         } else {
-          // Convert document to text and include images
           const result: Array<
             { type: 'text'; text: string } | { type: 'image'; image: string | URL }
           > = []
-
-          // Add document text
-          result.push({
-            type: 'text',
-            text: `[Document: ${part.name}]\n\n${part.content}`
-          })
-
-          // Add document images if present
+          result.push({ type: 'text', text: `[Document: ${part.name}]\n\n${part.content}` })
           if (part.images && part.images.length > 0) {
             result.push({
               type: 'text',
               text: `\n\n[This document contains ${part.images.length} image(s)]`
             })
-
             part.images.forEach((img) => {
-              result.push({
-                type: 'image',
-                image: img.dataUrl
-              })
+              result.push({ type: 'image', image: img.dataUrl })
             })
           }
-
           return result
         }
       })
     }
   }
 
-  // assistant
   return {
     role: 'assistant',
     content: typeof msg.content === 'string' ? msg.content : ''
@@ -186,69 +153,23 @@ export async function POST(req: NextRequest): Promise<Response> {
       convertToCoreMessage({ role: 'user', content: input })
     ]
 
-    const { model, isAzure, openaiModel, openaiProvider } = getModel()
-    const effectiveModel = requestedModel || openaiModel
+    // Build the model fresh every request so the selected model is always respected
+    const model = buildModel(requestedModel)
+    const provider = getProvider()
+
+    console.log('[Chat API] Using model:', requestedModel || (provider.isAzure ? provider.azureDeployment : provider.defaultModel))
 
     const runStream = async () => {
-      if (isAzure) {
-        const canUseWebSearch = true
-        console.log('[Chat API] Auto web search:', {
-          provider: 'azure',
-          canUseWebSearch,
-          modelWillDecide: canUseWebSearch
-        })
-
+      if (provider.isAzure) {
         const tools = {
-          // Azure Web Search (preview)
-          // The model will automatically decide when to use this tool
           web_search_preview: toToolSetEntry(
-            azureProvider.tools.webSearchPreview({
-              searchContextSize: 'high'
-              // userLocation: {
-              //   type: 'approximate',
-              //   country: 'CN'
-              // }
-            })
+            azureProvider.tools.webSearchPreview({ searchContextSize: 'high' })
           )
         } satisfies ToolSet
-
-        return streamText({
-          model,
-          messages: messagesWithHistory,
-          tools
-          // Note: No toolChoice specified - let the model decide intelligently
-        })
+        return streamText({ model, messages: messagesWithHistory, tools })
       }
 
-      if (openaiProvider && effectiveModel) {
-        try {
-          const tools = {
-            web_search_preview: toToolSetEntry(
-              openaiProvider.tools.webSearchPreview({
-                searchContextSize: 'high'
-              })
-            )
-          } satisfies ToolSet
-
-          return await streamText({
-            model: openaiProvider.responses(effectiveModel),
-            messages: messagesWithHistory,
-            tools
-          })
-        } catch (error) {
-          console.error('[Chat API] Web search failed, falling back to chat:', error)
-        }
-      }
-
-      console.log('[Chat API] Chat completion fallback:', {
-        provider: 'openai',
-        model: effectiveModel ?? 'unknown'
-      })
-
-      return streamText({
-        model: openaiProvider ? openaiProvider.chat(effectiveModel ?? 'gpt-4o-mini') : model,
-        messages: messagesWithHistory
-      })
+      return streamText({ model, messages: messagesWithHistory })
     }
 
     if (!wantsUiStream) {
@@ -262,22 +183,15 @@ export async function POST(req: NextRequest): Promise<Response> {
         writer.merge(result.toUIMessageStream({ sendSources: true, sendReasoning: false }))
       },
       onFinish: ({ finishReason, responseMessage }) => {
-        console.log('[Chat API] UI stream finished:', {
-          finishReason,
-          messageId: responseMessage?.id
-        })
+        console.log('[Chat API] UI stream finished:', { finishReason, messageId: responseMessage?.id })
       }
     })
 
-    return createUIMessageStreamResponse({
-      stream
-    })
+    return createUIMessageStreamResponse({ stream })
   } catch (error) {
     console.error('[Chat API] Error:', error)
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
