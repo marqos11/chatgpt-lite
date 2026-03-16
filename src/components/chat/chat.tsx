@@ -276,26 +276,7 @@ function Chat(_: ChatProps, ref: React.ForwardedRef<ChatRef>): React.JSX.Element
       </div>
     )
   } else if (messages.length === 0) {
-    chatBody = (
-      <div className="flex h-full min-h-[60vh] flex-col items-center justify-center px-4">
-        <div className="animate-in fade-in zoom-in-95 relative w-full max-w-2xl -translate-y-4 space-y-8 text-center duration-200 motion-reduce:animate-none">
-          <div className="space-y-6">
-            <h1
-              className="text-foreground font-display animate-in fade-in slide-in-from-bottom-2 text-4xl font-medium tracking-tight text-balance duration-200 motion-reduce:animate-none md:text-5xl lg:text-6xl"
-              style={{ animationDelay: '100ms' }}
-            >
-              What shall we explore?
-            </h1>
-            <p
-              className="text-muted-foreground animate-in fade-in slide-in-from-bottom-2 mx-auto max-w-md font-serif text-lg leading-relaxed text-pretty duration-200 motion-reduce:animate-none md:text-xl"
-              style={{ animationDelay: '200ms' }}
-            >
-              I&apos;m here to help you think, write, and discover.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
+    chatBody = <div className="flex h-full min-h-[60vh]" />
   } else {
     chatBody = <MessageList messages={messages} isStreaming={isCurrentChatLoading} />
   }
