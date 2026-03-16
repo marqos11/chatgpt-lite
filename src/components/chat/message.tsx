@@ -247,11 +247,24 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
 
     const rawText = textParts.join('')
 
-    // Extract tool-noise: [WebSearch] lines + any tool_name {...} call blocks (multi-line JSON)
+    // PRIMARY: Extract <think>...</think> or <thinking>...</thinking> tags from the text
+    const THINK_TAG = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi
+    const thinkTagBlocks: string[] = []
+    let afterThinkTags = rawText.replace(THINK_TAG, (_, content) => {
+      const t = content.trim()
+      if (t) thinkTagBlocks.push(t)
+      return ''
+    }).trim()
+
+    if (thinkTagBlocks.length > 0) {
+      reasoning.push(...thinkTagBlocks)
+    }
+
+    // SECONDARY: Extract tool-noise lines + tool_name {...} call blocks
     const TOOL_LINE = /^(?:\[WebSearch\].*|\[Tool(?:Use|Result)\].*)$/gm
     const TOOL_CALL = /(?:web_search_with_snippets|browse_page|x_keyword_search|x_semantic_search|x_\w+|web_search)\s*\{[\s\S]*?\}/g
     const toolLines: string[] = []
-    let afterToolNoise = rawText
+    let afterToolNoise = afterThinkTags
       .replace(TOOL_LINE, (match) => { toolLines.push(match.trim()); return '' })
       .replace(TOOL_CALL, (match) => { toolLines.push(match.trim()); return '' })
       .replace(/\n{3,}/g, '\n\n').trim()
@@ -260,15 +273,10 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
       reasoning.unshift(toolLines.join('\n'))
     }
 
-    // Detect Grok-style narrative thinking regardless of whether tool noise was found.
-    // Strategy: find where the actual answer begins — it starts with a markdown heading,
-    // bold title line, or a formal sentence that doesn't look like internal monologue.
-    // Everything before that point is thinking content.
-    if (/^Thinking about\b/i.test(afterToolNoise)) {
-      // Real response indicators: markdown headings, bold-title lines, or lines
-      // that start a clearly formatted answer (numbered list intro, etc.)
+    // TERTIARY: Detect Grok-style narrative thinking ("Thinking about your request...")
+    // Only run if no think tags were found
+    if (thinkTagBlocks.length === 0 && /^Thinking about\b/i.test(afterToolNoise)) {
       const RESPONSE_START = /^(?:#{1,3}\s|\*{1,2}[A-Z]|Here (?:are|is)\s|As of\s|Below\s|The following)/m
-
       const match = RESPONSE_START.exec(afterToolNoise)
       if (match && match.index > 0) {
         const thoughtText = afterToolNoise.slice(0, match.index).trim()
@@ -278,7 +286,6 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
           afterToolNoise = responseText
         }
       } else {
-        // No clear response start found — entire text is thinking
         reasoning.push(afterToolNoise)
         afterToolNoise = ''
       }
