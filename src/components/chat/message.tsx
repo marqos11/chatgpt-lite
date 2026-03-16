@@ -260,10 +260,8 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
       reasoning.unshift(toolLines.join('\n'))
     }
 
-    // Detect Grok-style narrative thinking: a leading block that starts with
-    // "Thinking about..." and mixes activity sentences, bullet points, and inline tool calls.
-    // We consume all leading content that looks like internal monologue / tool activity.
-    if (reasoning.length === 0 && /^Thinking about\b/i.test(afterToolNoise)) {
+    // Detect Grok-style narrative thinking regardless of whether tool noise was found
+    if (/^Thinking about\b/i.test(afterToolNoise)) {
       const ACTIVITY = /\b(searching|browsing|checking|planning|using web search|looking|fetching|retrieving|scanning|considering|tailoring|summariz|starting with|analyzing|exploring|grouping|prioritiz|listing|extracting|reviewing|gathering)/i
       // Split into chunks separated by blank lines
       const paragraphs = afterToolNoise.split(/\n{2,}/)
