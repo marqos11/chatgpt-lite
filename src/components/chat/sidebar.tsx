@@ -16,6 +16,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { cn } from '@/lib/utils'
 import {
   Bot,
+  ChevronDown,
   MessageSquare,
   MoreHorizontal,
   PanelLeft,
@@ -25,11 +26,12 @@ import {
   Plus,
   Trash2
 } from 'lucide-react'
+import { MODELS, type ModelId } from '@/services/constant'
 
 import ChatContext from './chatContext'
 
 export function SideBar(): React.JSX.Element {
-  const { toggleSidebar, onToggleSidebar, openPersonaPanel } = useAppContext()
+  const { toggleSidebar, onToggleSidebar, openPersonaPanel, selectedModel, setSelectedModel } = useAppContext()
   const {
     currentChatId,
     chatList,
@@ -351,7 +353,7 @@ export function SideBar(): React.JSX.Element {
             </div>
           </ScrollArea>
           {/* Persona Store Button */}
-          <div className="mt-auto pt-4">
+          <div className="mt-auto pt-4 space-y-2">
             <Button
               type="button"
               variant="ghost"
@@ -368,6 +370,27 @@ export function SideBar(): React.JSX.Element {
                 ✦
               </span>
             </Button>
+
+            {/* Model Selector */}
+            <div className="rounded-xl border border-border/40 bg-muted/30 px-3 py-2.5">
+              <p className="mb-1.5 text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                Model
+              </p>
+              <div className="relative">
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value as ModelId)}
+                  className="w-full appearance-none rounded-lg border border-border/50 bg-background px-2.5 py-1.5 pr-7 text-xs font-medium text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/10 cursor-pointer"
+                >
+                  {MODELS.map((model) => (
+                    <option key={model} value={model}>
+                      {model}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+              </div>
+            </div>
           </div>
         </div>
       </div>

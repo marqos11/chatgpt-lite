@@ -20,6 +20,7 @@ import ChatContext from '@/components/chat/chatContext'
 import type { Chat, ChatMessage } from '@/components/chat/interface'
 import { MessageList } from '@/components/chat/message-list'
 import { usePersonaContext } from '@/components/chat/personaContext'
+import { useAppContext } from '@/contexts/app'
 import { ensureMessageIds, generateMessageId } from '@/components/chat/utils'
 import { createChatTransport } from '@/lib/chat-transport'
 import { useChat } from '@ai-sdk/react'
@@ -47,6 +48,7 @@ function Chat(_: ChatProps, ref: React.ForwardedRef<ChatRef>): React.JSX.Element
     onCreateDefaultChat
   } = useContext(ChatContext)
   const { getPersonaById } = usePersonaContext()
+  const { selectedModel } = useAppContext()
 
   const [composerError, setComposerError] = useState<string | null>(null)
   const [hasActiveChat, setHasActiveChat] = useState(Boolean(currentChatId))
@@ -199,7 +201,8 @@ function Chat(_: ChatProps, ref: React.ForwardedRef<ChatRef>): React.JSX.Element
       try {
         await sendMessage(userMessage, {
           body: {
-            prompt: personaPrompt
+            prompt: personaPrompt,
+            model: selectedModel
           }
         })
         return true
