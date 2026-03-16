@@ -247,10 +247,10 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
 
     const rawText = textParts.join('')
 
-    // PRIMARY: Extract <think>...</think> or <thinking>...</thinking> tags from the text
+    // Extract <think>...</think> or <thinking>...</thinking> tags
     const THINK_TAG = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi
     const thinkTagBlocks: string[] = []
-    let afterThinkTags = rawText.replace(THINK_TAG, (_, content) => {
+    const afterThinkTags = rawText.replace(THINK_TAG, (_, content) => {
       const t = content.trim()
       if (t) thinkTagBlocks.push(t)
       return ''
@@ -260,40 +260,9 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
       reasoning.push(...thinkTagBlocks)
     }
 
-    // SECONDARY: Extract tool-noise lines + tool_name {...} call blocks
-    const TOOL_LINE = /^(?:\[WebSearch\].*|\[Tool(?:Use|Result)\].*)$/gm
-    const TOOL_CALL = /(?:web_search_with_snippets|browse_page|x_keyword_search|x_semantic_search|x_\w+|web_search)\s*\{[\s\S]*?\}/g
-    const toolLines: string[] = []
-    let afterToolNoise = afterThinkTags
-      .replace(TOOL_LINE, (match) => { toolLines.push(match.trim()); return '' })
-      .replace(TOOL_CALL, (match) => { toolLines.push(match.trim()); return '' })
-      .replace(/\n{3,}/g, '\n\n').trim()
-
-    if (toolLines.length > 0) {
-      reasoning.unshift(toolLines.join('\n'))
-    }
-
-    // TERTIARY: Detect Grok-style narrative thinking ("Thinking about your request...")
-    // Only run if no think tags were found
-    if (thinkTagBlocks.length === 0 && /^Thinking about\b/i.test(afterToolNoise)) {
-      const RESPONSE_START = /^(?:#{1,3}\s|\*{1,2}[A-Z]|Here (?:are|is)\s|As of\s|Below\s|The following)/m
-      const match = RESPONSE_START.exec(afterToolNoise)
-      if (match && match.index > 0) {
-        const thoughtText = afterToolNoise.slice(0, match.index).trim()
-        const responseText = afterToolNoise.slice(match.index).trim()
-        if (thoughtText) {
-          reasoning.push(thoughtText)
-          afterToolNoise = responseText
-        }
-      } else {
-        reasoning.push(afterToolNoise)
-        afterToolNoise = ''
-      }
-    }
-
     const withoutTrailingLinks = sources.length > 0
-      ? stripTrailingSourceMarkdownLinks(afterToolNoise, sources)
-      : afterToolNoise
+      ? stripTrailingSourceMarkdownLinks(afterThinkTags, sources)
+      : afterThinkTags
 
     return { reasoningBlocks: reasoning, markdownSource: withoutTrailingLinks }
   }, [deferredParts, sources])
