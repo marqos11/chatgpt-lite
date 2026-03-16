@@ -28,5 +28,5 @@ export function MessageList({ messages, isStreaming }: MessageListProps): React.
     [isStreaming, lastAssistantIndex, messages]
   )
 
-  return <div className="space-y-4">{messageNodes}</div>
+  return <div className="divide-border/40 divide-y">{messageNodes}</div>
 }

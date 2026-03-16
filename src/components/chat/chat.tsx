@@ -326,13 +326,13 @@ function Chat(_: ChatProps, ref: React.ForwardedRef<ChatRef>): React.JSX.Element
         resize="smooth"
       >
         <StickToBottom.Content className="relative flex min-h-full flex-col">
-          <div className="@container/chat relative mx-auto w-full max-w-5xl flex-1 px-4 pt-4 pb-3 md:px-6 lg:px-8">
+          <div className="@container/chat relative mx-auto w-full flex-1 px-4 pt-3 pb-2 text-[0.9rem] md:px-6 lg:px-10">
             {chatBody}
           </div>
         </StickToBottom.Content>
       </StickToBottom>
       <div className="border-border/40 shrink-0 border-t pt-4">
-        <div className="@container/chat mx-auto w-full max-w-5xl px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:px-6 lg:px-8">
+        <div className="@container/chat mx-auto w-full px-4 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:px-6 lg:px-10">
           <ChatComposer
             ref={composerRef}
             isChatHydrated={isChatHydrated}

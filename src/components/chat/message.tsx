@@ -204,10 +204,10 @@ function UserMessage({ message }: MessageProps): React.JSX.Element {
   const parts = getMessageParts(message)
 
   return (
-    <div className="group/message animate-in fade-in slide-in-from-bottom-2 flex w-full justify-end duration-200 motion-reduce:animate-none">
-      <div className="flex max-w-[90%] min-w-0 flex-col items-end md:max-w-[85%]">
-        <div className="bg-primary text-primary-foreground max-w-full overflow-hidden rounded-2xl rounded-br-md px-4 py-3 break-words shadow-sm transition-[border-color,box-shadow] duration-200 hover:shadow-md">
-          <div className="leading-relaxed whitespace-pre-wrap">{renderUserParts(parts)}</div>
+    <div className="group/message animate-in fade-in slide-in-from-bottom-2 flex w-full justify-end py-2.5 duration-200 motion-reduce:animate-none">
+      <div className="w-full min-w-0">
+        <div className="text-foreground/90 w-full break-words text-right">
+          <div className="leading-normal whitespace-pre-wrap">{renderUserParts(parts)}</div>
         </div>
       </div>
     </div>
@@ -234,10 +234,10 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
   }, [copy, copyText])
 
   return (
-    <div className="group/message animate-in fade-in slide-in-from-bottom-2 flex w-full justify-start duration-200 motion-reduce:animate-none">
-      <div className="flex max-w-[90%] min-w-0 flex-col items-start md:max-w-[85%]">
-        <div className="border-border/50 bg-card text-foreground hover:border-border/70 max-w-full overflow-hidden rounded-2xl rounded-bl-md border px-4 py-3 break-words shadow-sm transition-[border-color,box-shadow] duration-200 hover:shadow-md">
-          <div className="prose-sm leading-relaxed">
+    <div className="group/message animate-in fade-in slide-in-from-bottom-2 flex w-full justify-start py-2.5 duration-200 motion-reduce:animate-none">
+      <div className="w-full min-w-0">
+        <div className="text-foreground w-full break-words">
+          <div className="leading-normal">
             {showThinking ? (
               <span className="text-muted-foreground font-medium">Thinking...</span>
             ) : (
@@ -251,7 +251,7 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
             size="sm"
             variant="outline"
             className={cn(
-              'group/copy mt-1.5 ml-1 rounded-lg shadow-none transition-colors duration-200 disabled:opacity-100',
+              'group/copy mt-1 rounded-lg shadow-none transition-colors duration-200 disabled:opacity-100',
               copied
                 ? 'border-primary/30 bg-primary/5 text-primary'
                 : 'hover:border-primary/30 hover:bg-primary/5 hover:text-primary'
