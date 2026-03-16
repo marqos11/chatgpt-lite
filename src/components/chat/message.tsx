@@ -75,39 +75,31 @@ function getTextContent(parts: ChatMessagePart[]): string {
 function dedupeSources(sources: ChatMessageSource[]): ChatMessageSource[] {
   const seen = new Set<string>()
   const deduped: ChatMessageSource[] = []
-
   for (const source of sources) {
     const key =
       source.type === 'url'
         ? `url:${source.url}`
         : `document:${source.mediaType}:${source.filename ?? ''}:${source.title}`
-
     if (seen.has(key)) continue
     seen.add(key)
     deduped.push(source)
   }
-
   return deduped
 }
 
 function stripTrailingSourceMarkdownLinks(text: string, sources: ChatMessageSource[]): string {
   const urlSources = sources.filter((source) => source.type === 'url')
   if (urlSources.length === 0) return text
-
   const urls = new Set(urlSources.map((source) => source.url))
-
   let working = text.trimEnd()
   let strippedCount = 0
-
   while (true) {
     const match = working.match(/\[([^\]]+)\]\(([^)]+)\)\s*$/)
     if (!match) break
-    const matchedUrl = match[2]
-    if (!urls.has(matchedUrl)) break
+    if (!urls.has(match[2])) break
     strippedCount += 1
     working = working.slice(0, Math.max(0, working.length - match[0].length)).trimEnd()
   }
-
   return strippedCount >= 2 ? working : text
 }
 
@@ -115,12 +107,7 @@ function getSourcesFromParts(parts: ChatMessagePart[]): ChatMessageSource[] {
   const sourcesFromParts: ChatMessageSource[] = []
   for (const part of parts) {
     if (part.type === 'source-url') {
-      sourcesFromParts.push({
-        type: 'url',
-        id: part.sourceId,
-        url: part.url,
-        title: part.title
-      })
+      sourcesFromParts.push({ type: 'url', id: part.sourceId, url: part.url, title: part.title })
     } else if (part.type === 'source-document') {
       sourcesFromParts.push({
         type: 'document',
@@ -131,71 +118,20 @@ function getSourcesFromParts(parts: ChatMessagePart[]): ChatMessageSource[] {
       })
     }
   }
-
   return dedupeSources(sourcesFromParts)
 }
 
 function getSourceTitle(source: ChatMessageSource): string {
-  if (source.type === 'url') {
-    return source.title || source.url
-  }
-
-  if (source.filename) {
-    return source.title || `Document: ${source.filename}`
-  }
-
+  if (source.type === 'url') return source.title || source.url
+  if (source.filename) return source.title || `Document: ${source.filename}`
   return source.title || 'Document'
 }
 
-// Strip tool-use noise that leaks into the text stream:
-// [WebSearch], web_search_with_snippets {...}, etc.
-const TOOL_NOISE_PATTERNS = [
-  /\[WebSearch\]\s*[^\n]*/g,
-  /web_search_with_snippets\s*\{[^}]*\}/g,
-  /\[Tool(?:Use|Result)\][^\n]*/g,
-]
+// ── Think Block ──────────────────────────────────────────────────────────────
 
-function stripToolNoise(text: string): string {
-  let cleaned = text
-  for (const pattern of TOOL_NOISE_PATTERNS) {
-    cleaned = cleaned.replace(pattern, '')
-  }
-  return cleaned.replace(/\n{3,}/g, '\n\n').trim()
-}
-
-// Split raw text into think blocks and regular content
-interface ContentSegment {
-  type: 'think' | 'text'
-  content: string
-}
-
-function parseContent(raw: string): ContentSegment[] {
-  const cleaned = stripToolNoise(raw)
-  const segments: ContentSegment[] = []
-  // Match <think>...</think> or <thinking>...</thinking> (case-insensitive, dotall)
-  const THINK_RE = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-
-  while ((match = THINK_RE.exec(cleaned)) !== null) {
-    if (match.index > lastIndex) {
-      const before = cleaned.slice(lastIndex, match.index).trim()
-      if (before) segments.push({ type: 'text', content: before })
-    }
-    const thinkContent = match[1].trim()
-    if (thinkContent) segments.push({ type: 'think', content: thinkContent })
-    lastIndex = match.index + match[0].length
-  }
-
-  const after = cleaned.slice(lastIndex).trim()
-  if (after) segments.push({ type: 'text', content: after })
-
-  return segments
-}
-
-function ThinkBlock({ content }: { content: string }): React.JSX.Element {
+function ThinkBlock({ text }: { text: string }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const lines = content.split('\n').filter(Boolean).length
+  const lines = text.trim().split('\n').filter(Boolean).length
 
   return (
     <div className="mb-2 w-full">
@@ -226,8 +162,8 @@ function ThinkBlock({ content }: { content: string }): React.JSX.Element {
       </button>
       {open && (
         <div className="border-border/40 bg-muted/20 mt-1 rounded-lg border px-3 py-2.5">
-          <p className="text-muted-foreground whitespace-pre-wrap text-[0.78rem] leading-relaxed font-mono">
-            {content}
+          <p className="text-muted-foreground whitespace-pre-wrap font-mono text-[0.78rem] leading-relaxed">
+            {text.trim()}
           </p>
         </div>
       )}
@@ -235,11 +171,10 @@ function ThinkBlock({ content }: { content: string }): React.JSX.Element {
   )
 }
 
-function Sources({ sources }: { sources: ChatMessageSource[] }): React.JSX.Element | null {
-  if (sources.length === 0) {
-    return null
-  }
+// ── Sources ──────────────────────────────────────────────────────────────────
 
+function Sources({ sources }: { sources: ChatMessageSource[] }): React.JSX.Element | null {
+  if (sources.length === 0) return null
   return (
     <div className="mt-3 w-full space-y-2">
       <h4 className="text-muted-foreground flex items-center gap-1.5 text-sm font-semibold text-balance">
@@ -250,12 +185,8 @@ function Sources({ sources }: { sources: ChatMessageSource[] }): React.JSX.Eleme
         {sources.map((source, idx) => {
           const url = source.type === 'url' ? source.url : undefined
           const title = getSourceTitle(source)
-
           const Element = url ? 'a' : 'div'
-          const linkProps = url
-            ? { href: url, target: '_blank' as const, rel: 'noopener noreferrer' }
-            : {}
-
+          const linkProps = url ? { href: url, target: '_blank' as const, rel: 'noopener noreferrer' } : {}
           return (
             <Element
               key={source.id}
@@ -264,21 +195,10 @@ function Sources({ sources }: { sources: ChatMessageSource[] }): React.JSX.Eleme
             >
               <span className="text-muted-foreground shrink-0 font-medium">[{idx + 1}]</span>
               <div className="min-w-0 flex-1">
-                <div className="text-foreground group-hover/source:text-primary line-clamp-1 font-medium">
-                  {title}
-                </div>
-                {url && (
-                  <div className="text-muted-foreground mt-0.5 line-clamp-1 text-xs leading-tight">
-                    {url}
-                  </div>
-                )}
+                <div className="text-foreground group-hover/source:text-primary line-clamp-1 font-medium">{title}</div>
+                {url && <div className="text-muted-foreground mt-0.5 line-clamp-1 text-xs leading-tight">{url}</div>}
               </div>
-              {url && (
-                <ExternalLink
-                  className="text-muted-foreground mt-0.5 size-3 shrink-0"
-                  aria-hidden="true"
-                />
-              )}
+              {url && <ExternalLink className="text-muted-foreground mt-0.5 size-3 shrink-0" aria-hidden="true" />}
             </Element>
           )
         })}
@@ -287,9 +207,10 @@ function Sources({ sources }: { sources: ChatMessageSource[] }): React.JSX.Eleme
   )
 }
 
+// ── User Message ─────────────────────────────────────────────────────────────
+
 function UserMessage({ message }: MessageProps): React.JSX.Element {
   const parts = getMessageParts(message)
-
   return (
     <div className="group/message animate-in fade-in slide-in-from-bottom-2 flex w-full justify-end py-2.5 duration-200 motion-reduce:animate-none">
       <div className="w-full min-w-0">
@@ -301,30 +222,36 @@ function UserMessage({ message }: MessageProps): React.JSX.Element {
   )
 }
 
+// ── Assistant Message ─────────────────────────────────────────────────────────
+
 function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Element {
   const parts = getMessageParts(message)
   const sources = useMemo(() => getSourcesFromParts(parts), [parts])
   const deferredParts = useDeferredValue(parts)
   const { copy, copied } = useCopyToClipboard()
 
-  const rawText = useMemo(() => {
-    const text = getTextContent(deferredParts)
-    return sources.length > 0 ? stripTrailingSourceMarkdownLinks(text, sources) : text
+  // Collect reasoning parts and text parts separately
+  const { reasoningBlocks, markdownSource } = useMemo(() => {
+    const reasoning: string[] = []
+    const textParts: string[] = []
+
+    for (const part of deferredParts) {
+      if ((part as { type: string; text?: string }).type === 'reasoning') {
+        const t = (part as { type: string; text: string }).text?.trim()
+        if (t) reasoning.push(t)
+      } else if (part.type === 'text') {
+        textParts.push((part as { type: string; text: string }).text)
+      }
+    }
+
+    const rawText = textParts.join('')
+    const cleaned = sources.length > 0 ? stripTrailingSourceMarkdownLinks(rawText, sources) : rawText
+    return { reasoningBlocks: reasoning, markdownSource: cleaned }
   }, [deferredParts, sources])
 
-  const segments = useMemo(() => parseContent(rawText), [rawText])
-
-  // copyText should be clean response text only (no think blocks, no tool noise)
-  const copyText = useMemo(() => {
-    return segments
-      .filter((s) => s.type === 'text')
-      .map((s) => s.content)
-      .join('\n\n')
-      .trim()
-  }, [segments])
-
-  const hasTextContent = copyText.length > 0
-  const showThinking = Boolean(isThinking) && rawText.trim().length === 0
+  const copyText = useMemo(() => getTextContent(parts), [parts])
+  const hasTextContent = copyText.trim().length > 0
+  const showThinking = Boolean(isThinking) && !hasTextContent
 
   const handleCopy = useCallback(() => {
     void copy(copyText)
@@ -339,13 +266,10 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
               <span className="text-muted-foreground font-medium">Thinking...</span>
             ) : (
               <>
-                {segments.map((seg, i) =>
-                  seg.type === 'think' ? (
-                    <ThinkBlock key={i} content={seg.content} />
-                  ) : (
-                    <Markdown key={i}>{seg.content}</Markdown>
-                  )
-                )}
+                {reasoningBlocks.map((text, i) => (
+                  <ThinkBlock key={i} text={text} />
+                ))}
+                {markdownSource ? <Markdown>{markdownSource}</Markdown> : null}
               </>
             )}
           </div>
@@ -365,11 +289,7 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
             onClick={handleCopy}
             aria-label={copied ? 'Copied' : 'Copy to clipboard'}
           >
-            {copied ? (
-              <Check className="size-3.5" />
-            ) : (
-              <Copy className="size-3.5 transition-transform duration-200 group-hover/copy:scale-110" />
-            )}
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5 transition-transform duration-200 group-hover/copy:scale-110" />}
             <span className="text-xs font-medium">{copied ? 'Copied' : 'Copy'}</span>
           </Button>
         )}
@@ -378,11 +298,10 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
   )
 }
 
-function MessageComponent({ message, isThinking }: MessageProps): React.JSX.Element {
-  if (message.role === 'user') {
-    return <UserMessage message={message} />
-  }
+// ── Export ────────────────────────────────────────────────────────────────────
 
+function MessageComponent({ message, isThinking }: MessageProps): React.JSX.Element {
+  if (message.role === 'user') return <UserMessage message={message} />
   return <AssistantMessage message={message} isThinking={isThinking} />
 }
 
