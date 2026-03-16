@@ -251,7 +251,7 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
     const TOOL_LINE = /^(?:\[WebSearch\].*|\[Tool(?:Use|Result)\].*)$/gm
     const TOOL_CALL = /(?:web_search_with_snippets|x_keyword_search|x_semantic_search|x_\w+)\s*\{[\s\S]*?\}/g
     const toolLines: string[] = []
-    const cleanedText = rawText
+    let afterToolNoise = rawText
       .replace(TOOL_LINE, (match) => { toolLines.push(match.trim()); return '' })
       .replace(TOOL_CALL, (match) => { toolLines.push(match.trim()); return '' })
       .replace(/\n{3,}/g, '\n\n').trim()
@@ -260,9 +260,40 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
       reasoning.unshift(toolLines.join('\n'))
     }
 
+    // Detect Grok-style narrative thinking: a leading block that starts with
+    // "Thinking about..." and consists of search/browse/plan activity sentences.
+    // We pull it out and put it in its own thought block.
+    if (reasoning.length === 0 && /^Thinking about\b/i.test(afterToolNoise)) {
+      // The thinking block ends when a line doesn't look like internal monologue.
+      // Heuristic: split on double-newline; consume leading paragraphs that are
+      // predominantly activity phrases (Searching, Browsing, Planning, Checking, etc.)
+      const ACTIVITY = /\b(searching|browsing|checking|planning|using web search|looking|fetching|retrieving|scanning|considering|tailoring|summariz)/i
+      const paragraphs = afterToolNoise.split(/\n{2,}/)
+      const thoughtParas: string[] = []
+      let responseStart = 0
+      for (let i = 0; i < paragraphs.length; i++) {
+        const para = paragraphs[i]
+        // A paragraph is "thinking" if it starts with Thinking/activity words or
+        // is a list of dash-separated activity items
+        const isThoughtPara =
+          /^Thinking about\b/i.test(para) ||
+          ACTIVITY.test(para.slice(0, 120))
+        if (isThoughtPara) {
+          thoughtParas.push(para.trim())
+          responseStart = i + 1
+        } else {
+          break
+        }
+      }
+      if (thoughtParas.length > 0) {
+        reasoning.push(thoughtParas.join('\n\n'))
+        afterToolNoise = paragraphs.slice(responseStart).join('\n\n').trim()
+      }
+    }
+
     const withoutTrailingLinks = sources.length > 0
-      ? stripTrailingSourceMarkdownLinks(cleanedText, sources)
-      : cleanedText
+      ? stripTrailingSourceMarkdownLinks(afterToolNoise, sources)
+      : afterToolNoise
 
     return { reasoningBlocks: reasoning, markdownSource: withoutTrailingLinks }
   }, [deferredParts, sources])
