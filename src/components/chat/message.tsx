@@ -236,6 +236,7 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
     const textParts: string[] = []
 
     for (const part of deferredParts) {
+      // Dedicated reasoning part (e.g. Claude, DeepSeek)
       if ((part as { type: string; text?: string }).type === 'reasoning') {
         const t = (part as { type: string; text: string }).text?.trim()
         if (t) reasoning.push(t)
@@ -245,8 +246,24 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
     }
 
     const rawText = textParts.join('')
-    const cleaned = sources.length > 0 ? stripTrailingSourceMarkdownLinks(rawText, sources) : rawText
-    return { reasoningBlocks: reasoning, markdownSource: cleaned }
+
+    // Extract tool-noise lines (e.g. Grok WebSearch) into a thought block
+    const TOOL_LINE = /^(?:\[WebSearch\].*|web_search_with_snippets\s*\{[^}]*\}|\[Tool(?:Use|Result)\].*)$/gm
+    const toolLines: string[] = []
+    const cleanedText = rawText.replace(TOOL_LINE, (match) => {
+      toolLines.push(match.trim())
+      return ''
+    }).replace(/\n{3,}/g, '\n\n').trim()
+
+    if (toolLines.length > 0) {
+      reasoning.unshift(toolLines.join('\n'))
+    }
+
+    const withoutTrailingLinks = sources.length > 0
+      ? stripTrailingSourceMarkdownLinks(cleanedText, sources)
+      : cleanedText
+
+    return { reasoningBlocks: reasoning, markdownSource: withoutTrailingLinks }
   }, [deferredParts, sources])
 
   const copyText = useMemo(() => getTextContent(parts), [parts])
