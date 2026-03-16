@@ -170,8 +170,9 @@ function convertToCoreMessage(msg: ChatCompletionMessage): ModelMessage {
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     const toToolSetEntry = <T>(tool: T): ToolSet[string] => tool as ToolSet[string]
-    const { prompt, messages, input } = (await req.json()) as {
+    const { prompt, messages, input, model: requestedModel } = (await req.json()) as {
       prompt: string
+      model?: string
       messages: ChatCompletionMessage[]
       input: MessageContent
     }
@@ -186,6 +187,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     ]
 
     const { model, isAzure, openaiModel, openaiProvider } = getModel()
+    const effectiveModel = requestedModel || openaiModel
 
     const runStream = async () => {
       if (isAzure) {
@@ -218,11 +220,9 @@ export async function POST(req: NextRequest): Promise<Response> {
         })
       }
 
-      if (openaiProvider && openaiModel) {
+      if (openaiProvider && effectiveModel) {
         try {
           const tools = {
-            // OpenAI Web Search (preview)
-            // The model will automatically decide when to use this tool
             web_search_preview: toToolSetEntry(
               openaiProvider.tools.webSearchPreview({
                 searchContextSize: 'high'
@@ -231,7 +231,7 @@ export async function POST(req: NextRequest): Promise<Response> {
           } satisfies ToolSet
 
           return await streamText({
-            model: openaiProvider.responses(openaiModel),
+            model: openaiProvider.responses(effectiveModel),
             messages: messagesWithHistory,
             tools
           })
@@ -242,11 +242,11 @@ export async function POST(req: NextRequest): Promise<Response> {
 
       console.log('[Chat API] Chat completion fallback:', {
         provider: 'openai',
-        model: openaiModel ?? 'unknown'
+        model: effectiveModel ?? 'unknown'
       })
 
       return streamText({
-        model,
+        model: openaiProvider ? openaiProvider.chat(effectiveModel ?? 'gpt-4o-mini') : model,
         messages: messagesWithHistory
       })
     }
