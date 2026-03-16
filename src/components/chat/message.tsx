@@ -249,7 +249,7 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
 
     // Extract tool-noise: [WebSearch] lines + any tool_name {...} call blocks (multi-line JSON)
     const TOOL_LINE = /^(?:\[WebSearch\].*|\[Tool(?:Use|Result)\].*)$/gm
-    const TOOL_CALL = /(?:web_search_with_snippets|x_keyword_search|x_semantic_search|x_\w+)\s*\{[^}]*\}/gs
+    const TOOL_CALL = /(?:web_search_with_snippets|x_keyword_search|x_semantic_search|x_\w+)\s*\{[\s\S]*?\}/g
     const toolLines: string[] = []
     const cleanedText = rawText
       .replace(TOOL_LINE, (match) => { toolLines.push(match.trim()); return '' })
