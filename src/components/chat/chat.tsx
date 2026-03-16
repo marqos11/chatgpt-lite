@@ -308,7 +308,7 @@ function Chat(_: ChatProps, ref: React.ForwardedRef<ChatRef>): React.JSX.Element
         resize="smooth"
       >
         <StickToBottom.Content className="relative flex min-h-full flex-col">
-          <div className="@container/chat relative mx-auto w-full flex-1 px-4 pt-3 pb-2 text-[0.8rem] md:px-6 lg:px-10">
+          <div className="@container/chat relative mx-auto w-full flex-1 px-4 pt-3 pb-2 text-[0.85rem] md:px-6 lg:px-10">
             {chatBody}
           </div>
         </StickToBottom.Content>
