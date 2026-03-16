@@ -275,13 +275,9 @@ function Chat(_: ChatProps, ref: React.ForwardedRef<ChatRef>): React.JSX.Element
         </div>
       </div>
     )
-  } else {
-    chatBody = <MessageList messages={messages} isStreaming={isCurrentChatLoading} />
-  }
-
-  if (messages.length === 0 && isChatHydrated) {
-    return (
-      <div className="bg-background text-foreground flex min-h-0 flex-1 flex-col items-center justify-center px-4">
+  } else if (messages.length === 0) {
+    chatBody = (
+      <div className="flex h-full min-h-[60vh] flex-col items-center justify-center px-4">
         <div className="animate-in fade-in zoom-in-95 relative w-full max-w-2xl -translate-y-4 space-y-8 text-center duration-200 motion-reduce:animate-none">
           <div className="space-y-6">
             <h1
@@ -297,25 +293,11 @@ function Chat(_: ChatProps, ref: React.ForwardedRef<ChatRef>): React.JSX.Element
               I&apos;m here to help you think, write, and discover.
             </p>
           </div>
-          <div
-            className="animate-in fade-in slide-in-from-bottom-4 duration-200 motion-reduce:animate-none"
-            style={{ animationDelay: '300ms' }}
-          >
-            <ChatComposer
-              ref={composerRef}
-              isChatHydrated={isChatHydrated}
-              isSending={isCurrentChatLoading}
-              hasActiveChat={hasActiveChat}
-              showClear={false}
-              composerError={composerError}
-              setComposerError={setComposerError}
-              onClear={handleClearMessages}
-              onSend={handleSend}
-            />
-          </div>
         </div>
       </div>
     )
+  } else {
+    chatBody = <MessageList messages={messages} isStreaming={isCurrentChatLoading} />
   }
 
   return (
@@ -338,7 +320,7 @@ function Chat(_: ChatProps, ref: React.ForwardedRef<ChatRef>): React.JSX.Element
             isChatHydrated={isChatHydrated}
             isSending={isCurrentChatLoading}
             hasActiveChat={hasActiveChat}
-            showClear={true}
+            showClear={messages.length > 0}
             composerError={composerError}
             setComposerError={setComposerError}
             onClear={handleClearMessages}
