@@ -260,39 +260,27 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
       reasoning.unshift(toolLines.join('\n'))
     }
 
-    // Detect Grok-style narrative thinking regardless of whether tool noise was found
+    // Detect Grok-style narrative thinking regardless of whether tool noise was found.
+    // Strategy: find where the actual answer begins — it starts with a markdown heading,
+    // bold title line, or a formal sentence that doesn't look like internal monologue.
+    // Everything before that point is thinking content.
     if (/^Thinking about\b/i.test(afterToolNoise)) {
-      const ACTIVITY = /\b(searching|browsing|checking|planning|using web search|looking|fetching|retrieving|scanning|considering|tailoring|summariz|starting with|analyzing|exploring|grouping|prioritiz|listing|extracting|reviewing|gathering)/i
-      // Split into chunks separated by blank lines
-      const paragraphs = afterToolNoise.split(/\n{2,}/)
-      const thoughtParas: string[] = []
-      let responseStart = 0
-      for (let i = 0; i < paragraphs.length; i++) {
-        const para = paragraphs[i].trim()
-        // A paragraph is "thinking" if it:
-        // - starts with Thinking/activity words
-        // - is a bullet list where most items are activity phrases
-        // - contains inline tool call remnants (browse_page, web_search, num_results=)
-        const hasBullets = /^[-•*]\s/m.test(para)
-        const bulletItems = para.split(/\n/).filter(l => /^[-•*]\s/.test(l.trim()))
-        const activityBullets = bulletItems.filter(l => ACTIVITY.test(l))
-        const isActivityBulletList = hasBullets && bulletItems.length > 0 && activityBullets.length / bulletItems.length >= 0.5
-        const hasToolRemnant = /\bnum_results=|browse_page|web_search\b/i.test(para)
-        const isThoughtPara =
-          /^Thinking about\b/i.test(para) ||
-          ACTIVITY.test(para.slice(0, 150)) ||
-          isActivityBulletList ||
-          hasToolRemnant
-        if (isThoughtPara) {
-          thoughtParas.push(para)
-          responseStart = i + 1
-        } else {
-          break
+      // Real response indicators: markdown headings, bold-title lines, or lines
+      // that start a clearly formatted answer (numbered list intro, etc.)
+      const RESPONSE_START = /^(?:#{1,3}\s|\*{1,2}[A-Z]|Here (?:are|is)\s|As of\s|Below\s|The following)/m
+
+      const match = RESPONSE_START.exec(afterToolNoise)
+      if (match && match.index > 0) {
+        const thoughtText = afterToolNoise.slice(0, match.index).trim()
+        const responseText = afterToolNoise.slice(match.index).trim()
+        if (thoughtText) {
+          reasoning.push(thoughtText)
+          afterToolNoise = responseText
         }
-      }
-      if (thoughtParas.length > 0) {
-        reasoning.push(thoughtParas.join('\n\n'))
-        afterToolNoise = paragraphs.slice(responseStart).join('\n\n').trim()
+      } else {
+        // No clear response start found — entire text is thinking
+        reasoning.push(afterToolNoise)
+        afterToolNoise = ''
       }
     }
 
