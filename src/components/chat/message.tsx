@@ -247,13 +247,14 @@ function AssistantMessage({ message, isThinking }: MessageProps): React.JSX.Elem
 
     const rawText = textParts.join('')
 
-    // Extract tool-noise lines (e.g. Grok WebSearch) into a thought block
-    const TOOL_LINE = /^(?:\[WebSearch\].*|web_search_with_snippets\s*\{[^}]*\}|\[Tool(?:Use|Result)\].*)$/gm
+    // Extract tool-noise: [WebSearch] lines + any tool_name {...} call blocks (multi-line JSON)
+    const TOOL_LINE = /^(?:\[WebSearch\].*|\[Tool(?:Use|Result)\].*)$/gm
+    const TOOL_CALL = /(?:web_search_with_snippets|x_keyword_search|x_semantic_search|x_\w+)\s*\{[^}]*\}/gs
     const toolLines: string[] = []
-    const cleanedText = rawText.replace(TOOL_LINE, (match) => {
-      toolLines.push(match.trim())
-      return ''
-    }).replace(/\n{3,}/g, '\n\n').trim()
+    const cleanedText = rawText
+      .replace(TOOL_LINE, (match) => { toolLines.push(match.trim()); return '' })
+      .replace(TOOL_CALL, (match) => { toolLines.push(match.trim()); return '' })
+      .replace(/\n{3,}/g, '\n\n').trim()
 
     if (toolLines.length > 0) {
       reasoning.unshift(toolLines.join('\n'))
