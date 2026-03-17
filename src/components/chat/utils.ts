@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid'
 
-import type { ChatMessage, Persona } from './interface'
+import type { ChatMessage, Persona } from '@/components/chat/interface'
 
 export function generateMessageId(): string {
   return globalThis.crypto?.randomUUID?.() ?? uuid()
