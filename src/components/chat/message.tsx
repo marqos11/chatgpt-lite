@@ -51,7 +51,7 @@ function renderUserParts(parts: ChatMessagePart[]): ReactNode {
               key={index}
               src={part.url}
               alt="Uploaded"
-              className="mt-2 max-h-[300px] max-w-full rounded-lg"
+              className="mt-2 max-h-[300px] max-w-full rounded-lg ml-auto block"
             />
           )
         }
@@ -213,8 +213,8 @@ function UserMessage({ message }: MessageProps): React.JSX.Element {
   const parts = getMessageParts(message)
   return (
     <div className="group/message animate-in fade-in slide-in-from-bottom-2 flex w-full justify-end py-2.5 duration-200 motion-reduce:animate-none">
-      <div className="w-full min-w-0">
-        <div className="text-foreground/90 w-full break-words text-right">
+      <div className="min-w-0 max-w-[85%]">
+        <div className="text-foreground/90 break-words text-right">
           <div className="leading-normal whitespace-pre-wrap">{renderUserParts(parts)}</div>
         </div>
       </div>
