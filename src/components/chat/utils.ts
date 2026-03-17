@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid'
 
-import type { ChatMessage, Persona } from '@/components/chat/interface'
+import type { ChatMessage, Persona } from './interface'
 
 export function generateMessageId(): string {
   return globalThis.crypto?.randomUUID?.() ?? uuid()
@@ -18,7 +18,7 @@ export const DefaultPersona: Persona = {
   id: 'chatgpt',
   role: 'system',
   name: 'ChatGPT',
-  prompt: 'You are a helpful assistant.'
+  prompt: 'You are an AI assistant that helps people find information.'
 }
 
 export const DefaultPersonas: Persona[] = [DefaultPersona]
