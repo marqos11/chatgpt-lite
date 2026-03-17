@@ -344,6 +344,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
         return
       }
 
+      setMessage('')
+      setUploadedImages([])
+      setUploadedDocuments([])
+      setInterimTranscript('')
+
       const accepted = await onSend({
         text: input,
         uploadedImages,
@@ -353,11 +358,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       if (!accepted) {
         return
       }
-
-      setMessage('')
-      setUploadedImages([])
-      setUploadedDocuments([])
-      setInterimTranscript('')
     },
     [
       getComposerText,
