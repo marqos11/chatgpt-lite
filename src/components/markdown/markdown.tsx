@@ -155,6 +155,15 @@ const CodeBlock = memo(function CodeBlock(props: CodeBlockProps): React.JSX.Elem
 })
 
 const markdownComponents = {
+  table({ children, ...props }: HTMLAttributes<HTMLTableElement>) {
+    return (
+      <div
+        className="my-4 max-h-80 max-w-full overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <table {...props}>{children}</table>
+      </div>
+    )
+  },
   code(props: HighlightCodeProps) {
     const { children, className, ref, ...rest } = props
     const match = LANGUAGE_REGEX.exec(className || '')

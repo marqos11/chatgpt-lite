@@ -18,7 +18,7 @@ export const DefaultPersona: Persona = {
   id: 'chatgpt',
   role: 'system',
   name: 'ChatGPT',
-  prompt: 'You are an AI assistant that helps people find information.'
+  prompt: 'You are a helpful assistant.'
 }
 
 export const DefaultPersonas: Persona[] = [DefaultPersona]
